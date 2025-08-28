@@ -20,7 +20,7 @@ from concurrent.futures import ThreadPoolExecutor
 from youtubesearchpython.__future__ import VideosSearch, CustomSearch
 
 # Import your existing modules
-from TEAMZYRO import LOGGER, 
+from TEAMZYRO import LOGGER
 from TEAMZYRO.utils.database import is_on_off
 from TEAMZYRO.utils.formatters import time_to_seconds
 from config import BASE_API_URL, BASE_API_KEY
