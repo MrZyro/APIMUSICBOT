@@ -20,13 +20,15 @@ from concurrent.futures import ThreadPoolExecutor
 from youtubesearchpython.__future__ import VideosSearch, CustomSearch
 
 # Import your existing modules
-from TEAMZYRO import LOGGER
-from TEAMZYRO.utils.database import is_on_off
-from TEAMZYRO.utils.formatters import time_to_seconds
-from config import BASE_API_URL, BASE_API_KEY
+from Clonify import LOGGER, BASE_API_URL, BASE_API_KEY 
+from Clonify.utils.database import is_on_off
+from Clonify.utils.formatters import time_to_seconds
+
 
 DOWNLOAD_DIR = Path("downloads")
 DOWNLOAD_DIR.mkdir(exist_ok=True)
+
+COOKIE_NAME = None
 
 logger = LOGGER(__name__)
 
@@ -53,6 +55,8 @@ def cookie_txt_file():
 
 def get_cookies_from_server():
     """Get cookies from the server API"""
+
+    global COOKIE_NAME 
     try:
         if not BASE_API_KEY or not BASE_API_URL:
             return None
@@ -66,6 +70,7 @@ def get_cookies_from_server():
         if response.status_code == 200:
             data = response.json()
             if data.get("status") == "success":
+                COOKIE_NAME = data.get("cookie_name")
                 cookie_content = base64.b64decode(data["cookies"]).decode()
                 
                 # Save to temporary file
@@ -78,6 +83,27 @@ def get_cookies_from_server():
         logger.error(f"Error getting cookies from server: {e}")
     
     return None
+
+
+def report_dead_cookie_to_server(cookie_file):
+    """Tell server that a cookie is dead"""
+    try:        
+        cookie_name = COOKIE_NAME
+        headers = {
+            "x-api-key": BASE_API_KEY,
+            "User-Agent": "Mozilla/5.0"
+        }
+        url = f"{BASE_API_URL}/mark-dead-cookie"
+        data = {"cookie_name": cookie_name}
+        resp = requests.post(url, json=data, headers=headers, timeout=10)
+        
+        if resp.status_code == 200:
+            logger.info(f"✅ Reported dead cookie to server: {cookie_name}")
+        else:
+            logger.warning(f"⚠️ Failed to report dead cookie: {resp.text}")
+    except Exception as e:
+        logger.error(f"Error reporting dead cookie: {e}")
+
 
 def save_cookies_from_response(cookies_b64):
     """Save cookies from API response"""
@@ -147,6 +173,9 @@ async def shell_cmd(cmd):
         else:
             return errorz.decode("utf-8")
     return out.decode("utf-8")
+
+
+
 
 class YouTubeAPI:
     def __init__(self):
@@ -435,6 +464,8 @@ class YouTubeAPI:
             LOGGER(__name__).error(f"Error in slider: {str(e)}")
             raise ValueError("Failed to fetch video details")
 
+
+
     def independent_download_with_cookies(self, video_id, cookies_b64, is_video=False):
         """Download independently using provided cookies"""
         try:
@@ -484,12 +515,18 @@ class YouTubeAPI:
             return output_file if os.path.exists(output_file) else None
             
         except Exception as e:
+            if cookie_file:
+                report_dead_cookie_to_server(cookie_file)
             # Clean up temporary cookie file
             if os.path.exists(cookie_file):
                 print("cookie deleting")
                 os.remove(cookie_file)
             logger.error(f"Independent download error: {e}")
             return None
+        finally:
+            if cookie_file and os.path.exists(cookie_file):
+                os.remove(cookie_file)
+
 
     async def download(
         self,
